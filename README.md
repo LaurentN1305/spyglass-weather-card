@@ -1,6 +1,7 @@
 # Spyglass Weather Card
 
-An animated weather card for Home Assistant and [Pirate Weather](https://pirateweather.net/), but the basics work with any weather entity.
+An animated weather card for Home Assistant with historical and forecast charts.
+Built for [Pirate Weather](https://pirateweather.net/) data.
 
 ![Spyglass Weather Card: the sky changing through clear, rain, a thunderstorm, and snow, then the wind chart, the sun's arc, and a day's hours being read](https://raw.githubusercontent.com/lemker/spyglass-weather-card/main/spyglass-weather-card-demo.gif)
 
@@ -37,11 +38,9 @@ An animated weather card for Home Assistant and [Pirate Weather](https://piratew
 
 ### HACS
 
-1. HACS → ⋮ → **Custom repositories**.
-2. Add `https://github.com/lemker/spyglass-weather-card` with the type **Dashboard**.
-3. Find **Spyglass Weather Card** and download it. HACS adds the dashboard resource.
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=lemker&repository=spyglass-weather-card&category=plugin)
 
-### Manually
+### Manual
 
 1. Copy `spyglass-weather-card.js` to `/config/www/`.
 2. Settings → Dashboards → ⋮ → **Resources** → Add `/local/spyglass-weather-card.js` as a

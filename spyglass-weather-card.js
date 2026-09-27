@@ -969,11 +969,11 @@ function update(hass, entity) {
      days are whole. There is no air-quality forecast, so nothing lies ahead of today. */
   const aqiGraph = (Wd, H, off) => {
     off = Math.min(0, off || 0);
-    /* Today's chart ends at now rather than at midnight — with no forecast, the rest of
-       the day would only be empty space — so the line always reaches the right edge. At
-       least an hour wide, so just after midnight isn't a few minutes stretched across. */
+    /* The whole day, midnight to midnight, like the other charts: there is no air
+       quality forecast, so today's line stops at now and the rest of the day is shaded
+       as still to come, as on the sunlight chart. */
     const now = Date.now(), t0 = dayStartOf(off), tEnd = dayStartOf(off + 1);
-    const tRight = off === 0 ? Math.max(now, t0 + 36e5) : tEnd, spanA = tRight - t0;
+    const tRight = tEnd, spanA = tRight - t0;
     const cutA = off === 0 ? now : tEnd;
     const pts = ((((histOf('aHist', off) || {}).pts) || []).filter((p) => p[0] >= t0 && p[0] <= cutA)).slice();
     if (off === 0 && S.aqiNow != null) pts.push([now, S.aqiNow]);
@@ -1014,6 +1014,11 @@ function update(hass, entity) {
     /* ticks at midnight, 6 AM, noon and 6 PM of that day (local, so DST days work) */
     const ticks = [0, 6, 12, 18].map((h) => { const d = new Date(t0); d.setHours(h, 0, 0, 0); return d.getTime(); }).filter((t) => t < tRight);
     ticks.forEach((t) => { if (x(t) > 2 && x(t) < Wd - right - 2) svg.appendChild(el('line', { x1: x(t), y1: top, x2: x(t), y2: bottom, class: 'wx-w-vgrid' })); });
+    /* today: the hours still to come shaded, and a line at now, as on the other charts */
+    if (off === 0) {
+      svg.appendChild(el('rect', { x: x(now), y: top, width: Math.max(0, Wd - right - x(now)), height: bottom - top, class: 'wx-w-future' }));
+      svg.appendChild(el('line', { x1: x(now), y1: top, x2: x(now), y2: bottom, class: 'wx-w-now' }));
+    }
     /* the line, smooth, white with a soft dark shadow so it reads on every band */
     const smooth = (P) => {
       if (P.length < 2) return '';
@@ -1120,10 +1125,13 @@ function update(hass, entity) {
     const d0 = new Date(); d0.setHours(0, 0, 0, 0);
     const day0 = o.day0 != null ? o.day0 : d0.getTime(), now = Date.now();
     const pts = o.pts.slice().sort((p, q) => p[0] - q[0]);
-    /* the forecast is hourly, so the last entry sits an hour short of midnight; carry the
-       curve out to the edge rather than leaving a gap */
-    const dayEnd = day0 + 864e5;
-    if (pts.length && pts[pts.length - 1][0] < dayEnd - 6e4) pts.push([dayEnd, pts[pts.length - 1][1]]);
+    /* Carry the last point out to midnight: on a finished day the recorder keeps only
+       changes, so its last reading (sunlight's 0 at dusk) held until then; and the
+       forecast is hourly, so its last entry sits an hour short of midnight. Not on today
+       when the line ends well before midnight: a chart with no forecast (sunlight) ends
+       at now, and holding its last reading flat to midnight drew a forecast nobody made. */
+    const dayEnd = day0 + 864e5, lastT = pts.length ? pts[pts.length - 1][0] : 0;
+    if (pts.length && lastT < dayEnd - 6e4 && (dayEnd <= now || lastT >= dayEnd - 72e5)) pts.push([dayEnd, pts[pts.length - 1][1]]);
     /* ymin lets a scale sit below zero (dew point in winter); it defaults to 0, which
        leaves humidity and UV drawn exactly as before */
     const top = 12, padB = 20, right = 40, bottom = H - padB, ymax = o.ymax, ymin = o.ymin || 0, yspan = (ymax - ymin) || 1;
@@ -1242,16 +1250,22 @@ function update(hass, entity) {
     const cur = S.histFloors[slot0];
     S.histFloors[slot0] = cur == null ? off + 1 : Math.max(cur, off + 1);
   };
+  /* hourly forecast entries on a calendar day: a day needs a few to draw its chart (the
+     last one often gets only its midnight hour) */
+  const HOURS_FOR_CHART = 3;
+  const hoursOn = (dk) => (S.hours || []).filter((h) => L.dkey(new Date(h.datetime)) === dk).length;
   const daysAhead = () => {
-    const last = (S.hours || []).length ? Date.parse(S.hours[S.hours.length - 1].datetime) : 0;
-    /* the last day the hourly forecast touches, capped at how far the daily forecast
-       itself runs — taken from what the provider sent rather than a fixed number of
-       days, since providers differ (this one sends 8 daily, 7 days of hours) */
+    /* the last day the hourly forecast covers well enough to chart, capped at how far
+       the daily forecast itself runs — taken from what the provider sent rather than a
+       fixed number of days, since providers differ (this one sends 8 daily, 7 days of
+       hours) */
     const lastDaily = (S.items || []).reduce((m2, i2) => {
       const o2 = Math.round((Date.parse(i2.datetime) - dayStartOf(0)) / 864e5);
       return isFinite(o2) && o2 > m2 ? o2 : m2;
     }, 0);
-    return Math.max(0, Math.min(lastDaily, Math.floor((last - dayStartOf(0)) / 864e5)));
+    let lastH = 0;
+    for (let k = 1; k <= lastDaily; k++) if (hoursOn(L.dkey(new Date(dayStartOf(k)))) >= HOURS_FOR_CHART) lastH = k;
+    return Math.max(0, Math.min(lastDaily, lastH));
   };
   /* generic per-sensor history fetch for today, cached ten minutes; slot = S key */
   /* history for one day (off 0 = today, negative = earlier), cached ten minutes each */
@@ -1316,6 +1330,16 @@ function update(hass, entity) {
     /* drop points that sit almost on top of each other (the live reading next to a
        forecast hour), which would otherwise make the smoothing loop back on itself */
     pts = pts.filter((p, i) => i === 0 || p[0] - pts[i - 1][0] > 24e4);
+    /* A finished day's last reading held until midnight: the recorder keeps only changes,
+       so a temperature that last moved at 11:10 PM has no point after it, and the line
+       stopped short. Carry it to midnight when that is known to be true: the next day's
+       history opens with a reading at midnight (the sensor was still reporting), or the
+       gap is short. A long gap (a sensor that dropped out) stays empty. */
+    if (dayOff < 0 && pts.length && pts[pts.length - 1][0] < day1 - 6e4) {
+      const last = pts[pts.length - 1];
+      const next0 = (((histOf('tHist', dayOff + 1) || {}).pts) || [])[0];
+      if ((next0 && Math.abs(next0[0] - day1) < 6e4) || day1 - last[0] <= 3 * 36e5) pts.push([day1, last[1]]);
+    }
     /* carry the curve out to both edges: the forecast is hourly, so the window usually
        ends part way past the last entry (and starts just before the first one) */
     if (pts.length) {
@@ -1723,15 +1747,30 @@ function update(hass, entity) {
     return wrap;
   };
   /* "high of 11° at 3 PM, low of 7° at 5 AM": the highest and lowest readings and the
-     hour each came, rounded to the nearest hour as the rest of the card does; on a tie
-     the first wins, which also keeps the copy of the last reading carried to midnight
-     from winning */
+     hour each came, rounded to the nearest hour as the rest of the card does. When the
+     same value, as shown, comes back later as a separate spell, each is named ("a high
+     of 4 at 12 AM and 11 AM"). Readings back within six hours are the same spell, so a
+     value flickering across a rounding edge isn't listed over and over, and so is the
+     copy of the last reading carried to midnight. */
   const hiLoAt = (P, fmtV) => {
     if (!P || P.length < 2) return '';
     let lo = P[0], hi = P[0];
     P.forEach((p) => { if (p[1] < lo[1]) lo = p; if (p[1] > hi[1]) hi = p; });
     const at = (t) => new Date(Math.round(t / 36e5) * 36e5).toLocaleTimeString(lang, { hour: 'numeric', hour12: h12 });
-    return 'high of ' + fmtV(hi[1]) + ' at ' + at(hi[0]) + ', low of ' + fmtV(lo[1]) + ' at ' + at(lo[0]);
+    const times = (v) => {
+      const shown = fmtV(v), starts = [];
+      let lastT = -Infinity;
+      P.forEach((p) => {
+        if (fmtV(p[1]) !== shown) return;
+        if (p[0] - lastT > 216e5) starts.push(p[0]);
+        lastT = p[0];
+      });
+      const labels = [...new Set(starts.map(at))];
+      if (labels.length > 3) return 'several times, first at ' + labels[0];
+      if (labels.length === 3) return 'at ' + labels[0] + ', ' + labels[1] + ', and ' + labels[2];
+      return 'at ' + labels.join(' and ');
+    };
+    return 'high of ' + fmtV(hi[1]) + ' ' + times(hi[1]) + ', low of ' + fmtV(lo[1]) + ' ' + times(lo[1]);
   };
   /* ---- dew point: the moisture actually in the air, in the temperature's own unit.
      Where the provider or a sensor gives it, that is used; otherwise it is worked out
@@ -2034,7 +2073,7 @@ function update(hass, entity) {
       S.view = null; S.sig = null; if (S.draw) S.draw();
     });
     S.fc.addEventListener('click', (e) => {
-      const cell = e.target.closest && e.target.closest('.wx-item[data-day]');
+      const cell = e.target.closest && e.target.closest('.wx-item.wx-tappable[data-day]');
       if (!cell || type === 'hourly') return;   /* a day always opens its hours */
       S.view = { day: cell.dataset.day, label: cell.dataset.label, at: Date.now() };
       S.sig = null;
@@ -2783,7 +2822,9 @@ function update(hass, entity) {
         S.fitN = Math.max(1, Math.floor(room / (minW + 4)));
         list = list.slice(0, S.fitN);
       } else if (mi !== 'all') list = list.slice(0, Number(cfg.max_items) || 8);   /* a number caps it */
-      sig = 'd|' + list.map((i) => i.datetime + i.condition + i.temperature + i.templow + i.precipitation).join(';');
+      /* the hourly forecast's reach is in it too: it decides which days open */
+      sig = 'd|' + list.map((i) => i.datetime + i.condition + i.temperature + i.templow + i.precipitation).join(';')
+        + '|' + (S.hours ? S.hours.length + '@' + (S.hours.length ? S.hours[S.hours.length - 1].datetime : '') : '-');
       /* Each day's high and low on the calendar date — the same figures its day view shows,
          from the hourly forecast, and for today also what was recorded since midnight.
          Pirate Weather's own daily low is the coming night's (6 PM to 6 AM), so the strip
@@ -3146,6 +3187,17 @@ function update(hass, entity) {
           : n2 < 0 ? 'Last ' + d3.toLocaleDateString(lang, { weekday: 'long' }) : d3.toLocaleDateString(lang, { weekday: 'long' });
         S.view.at = Date.now(); S.sig = null; S.draw();
       });
+      /* a day the hourly forecast barely touches (the last one often gets only its
+         midnight hour) has nothing to draw: say so, and give that day's own forecast in
+         words, rather than an empty chart */
+      if (hrOff >= 1 && list.length < 3 && dayEnt && S.hours) {
+        fc.innerHTML = '';
+        const amtD = Number(dayEnt.precipitation);
+        L.el('div', 'wx-empty', fc).textContent = (S.view.label || 'This day') + ' isn\'t forecast hour by hour yet. For the day as a whole: high '
+          + L.t(dayEnt.temperature) + (dayEnt.templow != null ? ', low ' + L.t(dayEnt.templow) : '')
+          + (isFinite(amtD) && precipBase(amtD) >= 0.1 ? ', ' + fmtPrecip(amtD) : '') + '.';
+        S.fadedMode = null; S.edge(); return;
+      }
       if (!list.length && hrOff >= 0) {
         fc.innerHTML = '';
         L.el('div', 'wx-empty', fc).textContent = S.hours ? 'No hourly forecast for this day' : 'Loading…';
@@ -3210,10 +3262,10 @@ function update(hass, entity) {
         if (it.temperature == null && it.templow != null) nt = true;
         cell.dataset.day = L.dkey(d);
         cell.dataset.label = d.toLocaleDateString(lang, { weekday: 'long' });
-        /* every day in the strip opens. Where the hourly forecast does not reach, the
-           day view falls back to that day's daily forecast, so there is nothing here
-           that has to know how many hours arrived — which is what used to go stale. */
-        cell.classList.add('wx-tappable');
+        /* a day opens when the hourly forecast covers it well enough to chart; the last
+           day often gets only its midnight hour, and an empty chart is no use. Until the
+           hourly forecast has arrived every day opens (its view says it's loading). */
+        if (!S.hours || hoursOn(cell.dataset.day) >= HOURS_FOR_CHART) cell.classList.add('wx-tappable');
       }
       L.el('div', 'wx-item-label', cell).textContent = label;
       cell.appendChild(L.icon(variant(it.condition || 'cloudy', nt)));
