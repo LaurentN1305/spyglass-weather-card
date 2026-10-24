@@ -1,0 +1,4 @@
+type: custom:spyglass-weather-card
+entity: weather.ma_ville # Remplacer par votre entité Météo-France
+name: Ma ville
+forecast_type: daily

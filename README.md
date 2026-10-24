@@ -1,160 +1,109 @@
-# Spyglass Weather Card
+# Spyglass Météo-France — version française
 
-An animated weather card for Home Assistant with historical and forecast charts.
-Built for [Pirate Weather](https://pirateweather.net/) data.
+Adaptation de [lemker/spyglass-weather-card](https://github.com/lemker/spyglass-weather-card), commit `b8ee1b4992d63037772ca1469d556c5c90f0bdc7`, version locale `0.1.0-fr.1` du 24 octobre 2026. Licence Apache-2.0 conservée dans LICENSE. Les illustrations météo reprennent le travail du frontend Home Assistant, comme indiqué dans le fichier source.
 
-![Spyglass Weather Card: the sky changing through clear, rain, a thunderstorm, and snow, then the wind chart, the sun's arc, and a day's hours being read](https://raw.githubusercontent.com/lemker/spyglass-weather-card/main/spyglass-weather-card-demo.gif)
+La carte conserve les animations, les graphiques et l’éditeur visuel. Elle utilise l’intégration Météo-France déjà configurée, sans nouvelle clé ni intégration supplémentaire. Aucun fichier à compiler : `spyglass-weather-card.js` est le fichier installable.
 
-## Features
+## Installation manuelle — immédiatement utilisable
 
-- **Live sky** — the background follows the current condition, day or night, with drifting
-  clouds, rain, snow, and sleet at their real intensity, the sun's glow where the sun actually
-  is, and lightning only when a thunderstorm is happening or forecast. Changes crossfade
-  smoothly, and each effect can be switched off.
-- **Header** — condition, a short near-term summary, the temperature (or feels-like), a
-  rising/falling pressure arrow, and a banner for weather alerts.
-- **Chips** — UV, air quality (AQHI, US AQI, or CAQI), dew point, wind, sunrise/sunset, and
-  sunlight. Tap any chip for its chart.
-- **Forecast strip** — each day's condition, high, low, and rain. Tap a day to see its hours.
-- **Day chart** — recorded temperature behind now, forecast ahead, condition icons, and a rain
-  line (how hard it's raining, recorded then forecast). Drag across any chart to read it. A
-  summary covers conditions, high and low, rain and snow so far and expected, strong gusts, and
-  high UV.
-- **Chip charts** — UV, dew point, wind (with gusts and direction), air quality (with smoke and
-  fire risk), sunlight, and a sun arc with twilight, daylight, and tonight's moon phase.
-- **History** — every chart pages back through the days Home Assistant has recorded and
-  forward through the forecast, where there is one (air quality and sunlight have none). The
-  sun and moon work for any date.
-- **Units** — everything follows your Home Assistant units; sensors reporting in other units
-  are converted.
+1. Copier `spyglass-weather-card.js` dans `/config/www/spyglass-weather-card.js`. Créer le dossier `www` au besoin.
+2. Dans Home Assistant : **Paramètres → Tableaux de bord → ⋮ → Ressources** (activer le mode avancé du profil si nécessaire).
+3. Ajouter la ressource `/local/spyglass-weather-card.js?v=fr1`, type **Module JavaScript**. Si une ressource Spyglass existe déjà, remplacer son URL au lieu d’ajouter une seconde version.
+4. Recharger complètement le navigateur et, au besoin, vider le cache de l’application mobile.
+5. Ajouter une carte manuelle avec le contenu de `exemple-minimal.yaml`. Remplacer `weather.ma_ville` par votre identifiant réel.
 
-## Requirements
+Le type reste `custom:spyglass-weather-card`. Ne pas charger simultanément l’original et cette adaptation : ils enregistrent le même composant.
 
-- Home Assistant 2024.11 or newer
-- Pirate Weather integration v1.9.2 or newer
-- Home Assistant's recorder, for chart history
+## Installation HACS — après hébergement dans votre fork
 
-## Install
+L’archive locale ne constitue pas un dépôt HACS. Le dépôt officiel de lemker n’inclut pas cette adaptation et son installation ne donnera pas la version française.
 
-### HACS
+1. Créer votre fork du dépôt original sur GitHub, puis y déposer les fichiers de ce dossier à la racine, en remplaçant le JavaScript et le README. Conserver LICENSE et `hacs.json`.
+2. Dans HACS → menu ⋮ → **Dépôts personnalisés**, ajouter l’URL de **votre fork**, catégorie **Tableau de bord** (ou **Lovelace** selon la version).
+3. Télécharger la carte. Si HACS ne crée pas la ressource, ajouter `/hacsfiles/NOM-DE-VOTRE-DEPOT/spyglass-weather-card.js?v=fr1` comme module JavaScript.
+4. Retirer la ressource manuelle ou celle de la version originale, puis recharger le navigateur.
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=lemker&repository=spyglass-weather-card&category=plugin)
+Si vous créez une publication GitHub, joindre aussi `spyglass-weather-card.js` à cette publication. `hacs.json` conserve le nom de fichier attendu ; aucun outil de construction n’est requis. Aucun fork ni aucune publication GitHub n’a été créé par cette livraison.
 
-### Manual
-
-1. Copy `spyglass-weather-card.js` to `/config/www/`.
-2. Settings → Dashboards → ⋮ → **Resources** → Add `/local/spyglass-weather-card.js` as a
-   **JavaScript module**.
-
-## Setup
-
-Add the card from the dashboard's card picker and set everything in its visual editor, or
-write it in YAML. `entity`, your weather entity, is all it needs:
+## Configuration
 
 ```yaml
 type: custom:spyglass-weather-card
-entity: weather.home
+entity: weather.ma_ville
+name: Ma ville
+forecast_type: daily
 ```
 
-With Pirate Weather, entities are autofilled and sensors are named after the
-weather entity. Only sensors you ticked in the Pirate Weather
-integration exist, so whatever isn't there is simply left out.
+Consulter **Outils de développement → États** ou les entités de l’intégration pour les identifiants. L’éditeur visuel est traduit. Les clés YAML restent en anglais pour conserver la compatibilité des configurations.
 
-Everything else is optional and sits next to `entity`. Set a sensor option to use a different
-sensor, or to `false` to leave that part off. The visual editor shows the sensors it found;
-clearing one there sets it to `false`.
+`exemple-complet.yaml` illustre tous les branchements Météo-France utiles. Ses noms sont des exemples à remplacer, pas des noms garantis. Supprimer les capteurs absents ; certains capteurs de température, pression et vent sont désactivés par défaut et peuvent être activés depuis l’intégration.
 
-## Settings
+La détection automatique recherche seulement les capteurs existants ayant le préfixe de l’entité météo : `weather.lyon` → `sensor.lyon_…`. Elle ne consulte pas le registre des appareils. Les suffixes recherchés sont `temperature`, `pressure`, `cloud_cover` (ou `cloud` pour compatibilité), `uv`, `humidity`, `wind_speed`, `wind_gust`, `rain_chance`, `next_rain` et `weather_alert`. Si votre entité météo a été renommée, renseigner chaque capteur explicitement ou ajouter `sensor_prefix: sensor.lyon_`. La vigilance est départementale : indiquer explicitement son identifiant, par exemple celui trouvé dans vos États, qui peut ressembler à `sensor.69_weather_alert`.
 
-### Card
+Une option de capteur à `false` désactive sa détection. Le vent utilise les attributs de l’entité météo lorsque le capteur n’est pas trouvé ; `details.wind: false` masque ce branchement. Les prévisions passent par `weather/subscribe_forecast`, sans ancien attribut `forecast` et sans automatisation YAML. Les abonnements sont libérés au retrait ou à la reconfiguration de la carte.
 
-| Setting | Default | Description |
-| --- | --- | --- |
-| `entity` | — | Your weather entity (required) |
-| `name` | your city | Shown under the headline when there is no `subtitle_entity` text. Defaults to the city in your Home Assistant time zone |
-| `forecast_type` | `daily` | Forecast strip: `daily`, `hourly`, or `twice_daily` |
-| `max_items` | `all` | Strip length: `all`, `fit` (as many as fit), or a number |
-| `min_item_width` | `64` | Width of each strip item, in pixels, before it scrolls |
-| `return_home_after` | `45` | Seconds without a touch before an open view returns home; `0` never |
-| `apparent_temperature` | off | `true` shows feels-like: the Pirate Weather sensor when there is one, else the weather entity's own. Or set a sensor |
-| `hide_headline` | `false` | Hide the icon, the condition, and the line under it. With `hide_temperature` too, the header goes |
-| `hide_forecast` | `false` | Hide the forecast strip |
-| `hide_temperature` | `false` | Hide the temperature in the header |
-| `debug` | `false` | Controls for stepping through every background effect |
+### Carte et affichage
 
-### Entities
-
-| Setting | Description |
+| Clé | Défaut / usage |
 | --- | --- |
-| `condition_entity` | Headline text, e.g. "Clear" (falls back to the weather state) |
-| `subtitle_entity` | Line under the headline, e.g. "Clear for the hour" |
-| `temperature_entity` | Recorded temperature for the day chart |
-| `icon_entity` | Recorded conditions for the day chart's icons and summary |
-| `pressure_entity` | Rising/falling arrow beside the headline |
-| `cloud_entity` | Cloud cover, for how cloudy the sky looks |
-| `sun_entity` | Sun entity, default `sun.sun` |
-| `summary_entity` | The coming days' summary, in the line under the chips |
-| `hourly_summary_entity` | The near-term summary: starts the line under the chips and today's chart summary |
-| `alerts_entity` | Weather alerts banner |
+| `entity` | Entité `weather.*` obligatoire |
+| `name` | Nom convivial de l’entité ; peut être personnalisé |
+| `forecast_type` | `daily` ou `hourly` ; Météo-France ne fournit pas `twice_daily` |
+| `max_items` | `all`, `fit` ou un nombre |
+| `min_item_width` | 64 pixels |
+| `return_home_after` | 45 secondes ; 0 conserve la vue ouverte |
+| `apparent_temperature` | `true` affiche le ressenti disponible ; accepte aussi un identifiant de capteur |
+| `hide_headline`, `hide_temperature`, `hide_forecast` | `false` ; masquer la zone correspondante |
+| `debug` | `false` ; démonstration des effets, avec vigilance fictive signalée comme exemple |
+| `sensor_prefix` | Préfixe facultatif de recherche des capteurs, terminé par `_` |
 
-### `precipitation`
+### Capteurs et graphiques
 
-| Setting | Description |
+| Clé | Usage |
 | --- | --- |
-| `type` | Current precipitation type (rain, snow, sleet), picks what falls |
-| `rain` | Rain rate |
-| `snow` | Snow rate |
-| `ice` | Sleet / freezing rain rate |
+| `temperature_entity` | Historique de température |
+| `pressure_entity` | Tendance sur trois heures |
+| `cloud_entity` | Nébulosité du ciel animé |
+| `next_rain_entity` | Sous-titre qualitatif de pluie dans l’heure ; ignore une référence vieille de plus de 70 minutes |
+| `alerts_entity` | Bandeau de vigilance jaune, orange ou rouge ; le vert est masqué ; toucher ouvre les détails de l’entité |
+| `sun_entity` | `sun.sun` par défaut |
+| `condition_entity` | Texte de titre facultatif ; sinon conditions normalisées traduites |
+| `subtitle_entity` | Texte prioritaire sur le résumé `next_rain` |
+| `icon_entity` | Historique des conditions **normalisées Home Assistant** ; ne pas utiliser directement `original_condition` |
+| `summary_entity`, `hourly_summary_entity` | Résumés textuels facultatifs provenant de capteurs externes |
+| `details.uv` | Indice UV du capteur ; celui de Météo-France peut correspondre à une valeur journalière |
+| `details.wind`, `details.gust`, `details.bearing` | Vent, rafales et direction ; `wind: true` utilise l’entité météo |
+| `details.humidity`, `details.dew_point` | Humidité et point de rosée ; ce dernier est calculé si température et humidité sont disponibles |
+| `details.precip_probability` | Probabilité courante ; ne crée pas de probabilités horaires absentes des prévisions |
+| `details.rain_today`, `details.snow_today` | Cumuls **mesurés depuis minuit**, uniquement avec des capteurs externes appropriés |
+| `details.aqi`, `details.aqi_scale` | Qualité de l’air externe ; échelle `aqhi`, `epa` ou `caqi`, à adapter au capteur |
+| `details.smoke`, `details.fire`, `details.solar` | Fumée, risque d’incendie et rayonnement solaire externes |
+| `precipitation.type` | Capteur externe de type normalisé : `rain`, `snow`, `sleet` |
+| `precipitation.rain`, `.snow`, `.ice` | Débits externes, par exemple en mm/h ; jamais le cumul prévu sur 24 h |
 
-Rates set how heavy the falling rain or snow looks and draw the day chart's rain line.
+`show_chips` accepte `uv`, `aqi`, `dew_point`, `wind`, `sun`, `solar` : `true` pour afficher, `false` pour masquer. Les cinq premiers sont actifs par défaut et ne s’affichent que si leurs données sont utilisables ; `solar` est masqué par défaut.
 
-### `details`
+`animations` accepte `clouds`, `fog`, `stars`, `sun`, `rain`, `snow`, `lightning`, tous actifs par défaut. `false` immobilise les nuages, brouillard, étoiles ou halo, et masque les particules de pluie, neige ou éclairs. La préférence de réduction des animations du navigateur est respectée.
 
-| Setting | Description |
-| --- | --- |
-| `uv` | UV index chip and chart |
-| `aqi` | Air quality chip and chart |
-| `aqi_scale` | `aqhi`, `epa`, or `caqi` (based on your Home Assistant country if left out) |
-| `smoke` | Smoke line on the air quality chart, and in its summary |
-| `fire` | Fire risk level, in the air quality summary |
-| `dew_point` | Dew point chip and chart |
-| `humidity` | Humidity, shown in the dew point chart's readout |
-| `wind` | Wind speed chip and chart (`true` uses the weather entity) |
-| `gust` | Wind gusts |
-| `bearing` | Wind direction, for the wind chart's arrows |
-| `precip_probability` | Current chance of rain |
-| `rain_today` | Rain fallen today, for the day summary |
-| `snow_today` | Snow fallen today, for the day summary |
-| `solar` | Sunlight reaching the ground (W/m²) chip and chart |
+## Limites des données et du rendu
 
-### `show_chips`
+- Prévisions quotidiennes et horaires : horizon et champs variables selon la réponse. La carte affiche les entrées reçues, sans garantir une durée fixe. Les maximums/minimums quotidiens Météo-France sont conservés ; un graphique horaire peut montrer des extrêmes différents si sa couverture est partielle.
+- `precipitation` de Météo-France est un cumul **prévu** sur 24 h. Il n’est branché ni sur « pluie mesurée aujourd’hui », ni sur l’intensité instantanée. La pluie horaire des prévisions est utilisée lorsqu’elle existe.
+- `next_rain` donne des catégories et des intervalles de 5 à 10 minutes. Il sert au texte, sans conversion arbitraire en mm/h. Une absence de pluie peut donner un état `unknown` avec des attributs encore utilisables.
+- La vigilance dépend du territoire et de l’API ; la documentation indique France métropolitaine et Andorre. Un capteur par département : aucune détection automatique au hasard parmi plusieurs départements.
+- Probabilités de pluie/neige/gel : parfois absentes. L’UV du capteur est journalier selon la version de l’intégration ; son historique ne constitue pas une mesure instantanée du rayonnement UV.
+- Météo-France ne fournit pas tous les champs de Pirate Weather : qualité de l’air, fumée, feu, rayonnement solaire, débits de neige/verglas et cumuls observés nécessitent d’autres capteurs. Les pastilles manquantes sont omises. Pas de résumé textuel étendu généré par Météo-France dans cette adaptation.
+- Les effets pluie/neige restent indicatifs sans capteur d’intensité. Les éclairages et phases de lune sont calculés ; les données de soleil viennent de `sun.sun` et des coordonnées Home Assistant, qui doivent correspondre au lieu affiché.
+- Les graphiques historiques nécessitent Recorder et des capteurs enregistrés. Le vent issu uniquement des attributs météo ne crée pas d’historique de capteur. Les anciennes unités historiques sont supposées identiques à celles du capteur actuel.
+- Les dates sont françaises et les heures au format 24 h. Le découpage des jours hérité utilise le fuseau du navigateur : pour une lecture correcte, utiliser le même fuseau que Home Assistant, notamment près de minuit et aux changements d’heure.
+- Les textes fournis librement par des capteurs externes restent dans leur langue d’origine. La carte traduit ses propres textes et les états météo normalisés.
 
-Set a chip to `false` to hide it, or `true` to show it. A hidden chip's chart can't be opened.
+## Vérifications et dépannage
 
-| Chip | Default |
-| --- | --- |
-| `uv` | shown |
-| `aqi` | shown |
-| `dew_point` | shown |
-| `wind` | shown |
-| `sun` | shown |
-| `solar` | hidden |
+Tests de logique exécutables avec `node test.cjs` : détection et désactivation des capteurs, noms personnalisés, vigilance, résumé de pluie et configuration. Vérification de syntaxe : `node --check spyglass-weather-card.js`.
 
-### `animations`
+Un rendu dans Edge sans fenêtre a été vérifié avec un Home Assistant simulé : conditions, animations, pluie dans l’heure, vigilance et ouverture du graphique du vent. Ce test ne remplace pas une validation sur votre installation Home Assistant réelle, à laquelle cette conversation n’a pas accès.
 
-The sky moves: clouds and fog drift, stars twinkle, the sun's glow pulses, and rain, snow, and
-lightning fall and flash. The `animations` block turns effects off one at a time: clouds, fog,
-stars, and the sun glow then hold still, while rain, snow, and lightning aren't drawn. A device
-set to reduce motion gets a still sky. In the visual editor these are the switches under
-**Animations**.
+« Custom element doesn’t exist » : vérifier la ressource et le cache. Texte encore anglais : vérifier qu’une seule version Spyglass est chargée. Prévisions absentes : essayer l’action `weather.get_forecasts` dans les outils de développement avec votre entité et `type: daily` ou `hourly` ; vérifier les erreurs de l’intégration et la disponibilité de l’API. Capteur absent : activer l’entité correspondante ou supprimer sa ligne de configuration. Aucune réinstallation de Météo-France n’est nécessaire.
 
-| Setting | Default | Description |
-| --- | --- | --- |
-| `clouds` | on | Drifting clouds |
-| `fog` | on | Drifting fog |
-| `stars` | on | Twinkling stars |
-| `sun` | on | The sun glow's slow pulse |
-| `rain` | on | Drizzle, downpour, and hail |
-| `snow` | on | Snow and sleet |
-| `lightning` | on | Lightning |
-
+Sources examinées le 24 octobre 2026 : [dépôt Spyglass](https://github.com/lemker/spyglass-weather-card), [documentation Météo-France](https://www.home-assistant.io/integrations/meteo_france/), [plateforme météo Home Assistant](https://github.com/home-assistant/core/blob/dev/homeassistant/components/meteo_france/weather.py), [capteurs Home Assistant](https://github.com/home-assistant/core/blob/dev/homeassistant/components/meteo_france/sensor.py). Le code `dev` peut évoluer par rapport à votre version installée.

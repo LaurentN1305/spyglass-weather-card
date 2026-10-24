@@ -1,0 +1,40 @@
+# EXEMPLE : remplacer chaque identifiant par une entité réellement présente.
+# Supprimer les lignes des capteurs absents, ou utiliser false pour les désactiver.
+type: custom:spyglass-weather-card
+entity: weather.ma_ville
+name: Ma ville
+forecast_type: daily
+max_items: all
+min_item_width: 72
+return_home_after: 45
+sun_entity: sun.sun
+temperature_entity: sensor.ma_ville_temperature
+pressure_entity: sensor.ma_ville_pressure
+cloud_entity: sensor.ma_ville_cloud_cover
+next_rain_entity: sensor.ma_ville_next_rain
+# La vigilance est généralement nommée par DÉPARTEMENT, pas par ville.
+alerts_entity: sensor.XX_weather_alert
+details:
+  uv: sensor.ma_ville_uv
+  humidity: sensor.ma_ville_humidity
+  wind: sensor.ma_ville_wind_speed # ou true : attributs de weather.ma_ville
+  gust: sensor.ma_ville_wind_gust
+  precip_probability: sensor.ma_ville_rain_chance
+  rain_today: false
+  snow_today: false
+precipitation: false
+show_chips:
+  uv: true
+  wind: true
+  dew_point: true
+  sun: true
+  aqi: false
+  solar: false
+animations:
+  clouds: true
+  fog: true
+  stars: true
+  sun: true
+  rain: true
+  snow: true
+  lightning: true
