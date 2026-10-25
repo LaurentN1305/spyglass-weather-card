@@ -9,7 +9,7 @@
  * Home Assistant frontend (https://github.com/home-assistant/frontend), also Apache-2.0.
  */
 
-const VERSION = '0.1.0-fr.1';
+const VERSION = '0.1.0-fr.2';
 const TAG = 'spyglass-weather-card';
 
 // Adaptation française : données optionnelles, jamais de valeurs météorologiques inventées.
@@ -21,6 +21,20 @@ const FR_CONDITIONS = {
   hail: 'grêle', windy: 'venteux', 'windy-variant': 'venteux et nuageux',
   exceptional: 'conditions exceptionnelles', unknown: 'inconnu', unavailable: 'indisponible',
 };
+
+// Trajectoires en pixels adaptées à la hauteur réelle de la tuile.
+const precipitationFrames = (height, flake, sway, dir, lean) => {
+  const fall = Math.round(height * 1.3), drift = Math.round(fall * 0.21) * dir;
+  return flake ? [
+    { transform: 'translate3d(0,0,0)' },
+    { transform: 'translate3d(' + (sway + drift / 2) + 'px,' + Math.round(fall / 2) + 'px,0)' },
+    { transform: 'translate3d(' + drift + 'px,' + fall + 'px,0)' },
+  ] : [
+    { transform: 'translate3d(0,0,0) skewX(' + lean + 'deg)' },
+    { transform: 'translate3d(' + drift + 'px,' + fall + 'px,0) skewX(' + lean + 'deg)' },
+  ];
+};
+
 const convertWind = (v, from, to) => {
   const per = { 'km/h': 1, 'm/s': 3.6, mph: 1.609344, kn: 1.852, 'ft/s': 1.09728 };
   return per[from] && per[to] ? Number(v) * per[from] / per[to] : Number(v);
@@ -2312,10 +2326,15 @@ function update(hass, entity) {
         /* wind from the SE blows rain toward the NW: streaks lean and drift left.
            skewX(-θ) puts the bottom of the streak to the left; the horizontal drift
            over the fall matches the lean (tan 12° ≈ 0.21) */
-        const fallPx = Math.round((box.clientHeight || 300) * 1.3), sway = Math.round(r() * 40 - 20);
-        const dir = toLeftEff ? -1 : 1, lean = 12 * dir, driftPx = Math.round(fallPx * 0.21) * dir;
-        if (flake) L.anim(d, [{ transform: 'translate3d(0,0,0)' }, { transform: 'translate3d(' + (sway + driftPx / 2) + 'px,' + Math.round(fallPx / 2) + 'px,0)' }, { transform: 'translate3d(' + driftPx + 'px,' + fallPx + 'px,0)' }], dd, -r() * 10);
-        else L.anim(d, [{ transform: 'translate3d(0,0,0) skewX(' + lean + 'deg)' }, { transform: 'translate3d(' + driftPx + 'px,' + fallPx + 'px,0) skewX(' + lean + 'deg)' }], dd, -r() * 10);
+        const sway = Math.round(r() * 40 - 20);
+        const dir = toLeftEff ? -1 : 1, lean = 12 * dir;
+        // La hauteur finale peut arriver après la création de la scène (grille HA).
+        // Mettre à jour les trajectoires sans recréer les particules ni les nuages.
+        const frames = () => precipitationFrames(box.clientHeight || 300, flake, sway, dir, lean);
+        const falling = L.anim(d, frames(), dd, -r() * 10);
+        d.__resizeFall = () => {
+          if (falling && falling.effect && falling.effect.setKeyframes) falling.effect.setKeyframes(frames());
+        };
         d.style.opacity = (flake ? 0.6 + r() * 0.4 : 0.3 + r() * 0.35).toFixed(2);
       }
     };
@@ -2702,6 +2721,13 @@ function update(hass, entity) {
     d.classList.add('wx-tighter');
   };
   S.tile = () => {
+    const height = Math.ceil(box.clientHeight || 0);
+    if (height > 0 && height !== S.precipitationHeight) {
+      S.precipitationHeight = height;
+      S.bg.querySelectorAll('.wx-drop, .wx-flake').forEach((particle) => {
+        if (particle.__resizeFall) particle.__resizeFall();
+      });
+    }
     const w = Math.ceil(box.clientWidth || 0);
     if (!w) return;
     if (!S.tileW) {
