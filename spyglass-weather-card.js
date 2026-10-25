@@ -9,7 +9,7 @@
  * Home Assistant frontend (https://github.com/home-assistant/frontend), also Apache-2.0.
  */
 
-const VERSION = '0.1.0-fr.2';
+const VERSION = '0.1.0-fr.4';
 const TAG = 'spyglass-weather-card';
 
 // Adaptation française : données optionnelles, jamais de valeurs météorologiques inventées.
@@ -33,6 +33,20 @@ const precipitationFrames = (height, flake, sway, dir, lean) => {
     { transform: 'translate3d(0,0,0) skewX(' + lean + 'deg)' },
     { transform: 'translate3d(' + drift + 'px,' + fall + 'px,0) skewX(' + lean + 'deg)' },
   ];
+};
+
+
+// Comparer les dates calendaires, sans arrondir les heures ni les jours de 23/25 h.
+const forecastLastDay = (items, now = Date.now()) => {
+  const calendar = value => {
+    const d = new Date(value);
+    return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  };
+  const today = calendar(now);
+  return (items || []).reduce((last, entry) => {
+    const offset = (calendar(entry.datetime) - today) / 86400000;
+    return Number.isFinite(offset) ? Math.max(last, offset) : last;
+  }, 0);
 };
 
 const convertWind = (v, from, to) => {
@@ -975,7 +989,7 @@ function update(hass, entity) {
     const rows = L.el('div', 'wx-wind-summary', wrap);
     wrap.appendChild(svg);
     if (vals.length) {
-      const dirName = { N: 'nord', NE: 'nord-est', E: 'est', SE: 'sud-est', S: 'sud', SW: 'sud-ouest', W: 'ouest', NW: 'nord-ouest' };
+      const dirName = { N: 'nord', NE: 'nord-est', E: 'est', SE: 'sud-est', S: 'sud', SO: 'sud-ouest', O: 'ouest', NO: 'nord-ouest' };
       let txt = today2 && S.windNow ? 'Vent actuel : ' + Math.round(S.windNow.v) + ' ' + u + (S.windNow.dir ? ' de secteur ' + dirName[S.windNow.dir] : '') + '. ' : '';
       txt += (today2 ? 'Aujourd’hui, le vent varie de ' : pastDay ? 'Le vent variait de ' : 'Le vent varie de ') + Math.round(Math.min(...vals)) + ' à ' + Math.round(Math.max(...vals)) + ' ' + u;
       if (gv.length) txt += ', avec des rafales à ' + Math.round(Math.max(...gv)) + ' ' + u;
@@ -989,7 +1003,7 @@ function update(hass, entity) {
      CAQI 0-100+), and nothing on the entity says which, so it is configured — defaulting
      to a guess from Home Assistant's own country. */
   const aqiScales = {
-    epa: { name: 'AQI', edges: [50, 100, 150, 200, 300], top: 500,
+    epa: { name: 'IQA', edges: [50, 100, 150, 200, 300], top: 500,
       labels: ['Bon', 'Modéré', 'Mauvais (sensibles)', 'Mauvais', 'Très mauvais', 'Dangereux'],
       long: ['Bon', 'Modéré', 'Mauvais pour les personnes sensibles', 'Mauvais', 'Très mauvais', 'Dangereux'], floor: 60 },
     aqhi: { name: 'AQHI', edges: [3, 6, 10], top: 15,
@@ -1124,7 +1138,7 @@ function update(hass, entity) {
       const labS = off < 0
         ? el('text', { x: Math.max(40, Math.min(Wd - right - 40, endS[0])), y: endS[1] - 7, class: 'wx-pop-label wx-smoke-label', 'text-anchor': 'middle' })
         : el('text', { x: Math.max(40, endS[0] - 12), y: endS[1] - 7, class: 'wx-pop-label wx-smoke-label', 'text-anchor': 'end' });
-      labS.textContent = 'Smoke ' + Math.round(smPts[iS][1]) + ' ' + smU;
+      labS.textContent = 'Fumée ' + Math.round(smPts[iS][1]) + ' ' + smU;
       svg.appendChild(labS);
     }
     const smokeAt = (t2) => { let b2 = null; smPts.forEach((q) => { if (q[0] <= t2) b2 = q; }); return b2; };
@@ -1143,7 +1157,7 @@ function update(hass, entity) {
     svg.__scrub = { P: P, pts: pts, top: top, bottom: bottom, right: right, Wd: Wd,
       fmt: (v, t2) => {
         const sm2 = smShown ? smokeAt(t2) : null;
-        return Math.round(v) + (sm2 ? ' · smoke ' + Math.round(sm2[1]) + ' ' + smU : '') + ' · ' + new Date(t2).toLocaleTimeString(lang, { hour: 'numeric', minute: '2-digit', hour12: h12 });
+        return Math.round(v) + (sm2 ? ' · fumée ' + Math.round(sm2[1]) + ' ' + smU : '') + ' · ' + new Date(t2).toLocaleTimeString(lang, { hour: 'numeric', minute: '2-digit', hour12: h12 });
       } };
     const wrap = document.createElement('div'); wrap.className = 'wx-sun-wrap wx-aqi-wrap';
     /* the sentence sits above the chart, like the other views; the bands are already
@@ -1274,7 +1288,7 @@ function update(hass, entity) {
     return wrap;
   };
   /* today's points for a sensor-backed series: history + current + hourly forecast field */
-  const dayStartOf = (off) => { const d2 = new Date(); d2.setHours(0, 0, 0, 0); return d2.getTime() + (off || 0) * 864e5; };
+  const dayStartOf = (off) => { const d2 = new Date(); d2.setHours(0, 0, 0, 0); d2.setDate(d2.getDate() + (off || 0)); return d2.getTime(); };
   /* points for one day: recorded history behind "now" (today only) plus the hourly
      forecast ahead. dayOff steps forward through the forecast days. */
   const todayPts = (hist, nowVal, field, dayOff) => {
@@ -1312,10 +1326,7 @@ function update(hass, entity) {
        the daily forecast itself runs — taken from what the provider sent rather than a
        fixed number of days, since providers differ (this one sends 8 daily, 7 days of
        hours) */
-    const lastDaily = (S.items || []).reduce((m2, i2) => {
-      const o2 = Math.round((Date.parse(i2.datetime) - dayStartOf(0)) / 864e5);
-      return isFinite(o2) && o2 > m2 ? o2 : m2;
-    }, 0);
+    const lastDaily = forecastLastDay(S.items);
     let lastH = 0;
     for (let k = 1; k <= lastDaily; k++) if (hoursOn(L.dkey(new Date(dayStartOf(k)))) >= HOURS_FOR_CHART) lastH = k;
     return Math.max(0, Math.min(lastDaily, lastH));
@@ -1792,7 +1803,7 @@ function update(hass, entity) {
       if (gPk && Number(gPk.wind_gust_speed) * kmhOf >= 30) sents.push('Rafales à ' + Math.round(Number(gPk.wind_gust_speed)) + ' ' + wu + ' vers ' + hr2(Date.parse(gPk.datetime)));
       const uPk = ahead.reduce((m, i) => (Number(i.uv_index) > (m ? Number(m.uv_index) : -1) ? i : m), null);
       const uvPk = uPk ? Number(uPk.uv_index) : 0;
-      if (uvPk >= 6) sents.push('UV ' + (dayOff > 0 ? 'maximum' : 'maximum') + ' à ' + Math.round(uvPk) + ' (' + (uvPk >= 11 ? 'extrême' : uvPk >= 8 ? 'très élevé' : 'élevé') + ') around ' + hr2(Date.parse(uPk.datetime)));
+      if (uvPk >= 6) sents.push('Maximum UV à ' + Math.round(uvPk) + ' (' + (uvPk >= 11 ? 'extrême' : uvPk >= 8 ? 'très élevé' : 'élevé') + ') vers ' + hr2(Date.parse(uPk.datetime)));
     }
     foot.textContent = sents.length ? sents.map((t2) => cap(t2) + '.').join(' ') : '';
     return wrap;
@@ -2448,7 +2459,7 @@ function update(hass, entity) {
       /* knobs: tap one to step it through its values and watch the scene react.
          "auto" hands that input back to the sensors. */
       /* each knob starts on the live reading and steps through fixed values from there */
-      const rateF = (v) => v == null ? '–' : v === 0 ? 'none' : (Math.round(fromBase(v) * 100) / 100) + ' ' + precipU + '/h';
+      const rateF = (v) => v == null ? '–' : v === 0 ? 'aucune' : (Math.round(fromBase(v) * 100) / 100) + ' ' + precipU + '/h';
       S.dbgKnobs = [
         { key: 'dbgRain', src: 'rain', label: 'Pluie', vals: [null, 0, 0.2, 1, 2.5, 7.5, 15], fmt: rateF },
         { key: 'dbgSnow', src: 'snow', label: 'Neige', vals: [null, 0, 0.2, 1, 2.5, 7.5, 15], fmt: rateF },
@@ -2456,7 +2467,7 @@ function update(hass, entity) {
         { key: 'dbgWind', src: 'wind', label: 'Vent', vals: [null, 0, 10, 25, 45, 70], fmt: (v) => v == null ? '–' : Math.round(v / wPer) + ' ' + wu },
         { key: 'dbgDir', src: 'dir', label: '', vals: [null, 'W', 'E'], fmt: (v) => v === 'E' ? '⇠ déplacement' : v === 'W' ? 'déplacement ⇢' : '–' },
         { key: 'dbgCloud', src: 'cloud', label: 'Nuages', vals: [null, 0, 20, 50, 80, 100], fmt: (v) => v == null ? '–' : Math.round(v) + '%' },
-        { key: 'dbgStorm', src: 'storm', label: 'Orage', vals: [null, 3, 10, 25, 60], fmt: (v) => v == null ? 'none' : Math.round(v) + ' km' }
+        { key: 'dbgStorm', src: 'storm', label: 'Orage', vals: [null, 3, 10, 25, 60], fmt: (v) => v == null ? 'aucun' : Math.round(v) + ' km' }
       ];
       S.dbgOpts = L.el('div', 'wx-debug-opts', S.dbgPanel);
       S.dbgKnobs.forEach((kn) => {
@@ -2604,7 +2615,7 @@ function update(hass, entity) {
       else v = Number(a.wind_speed);
       if (isFinite(v)) {
         const k = u === 'm/s' ? v * 3.6 : u === 'mph' ? v * 1.609 : u === 'kn' ? v * 1.852 : v;
-        const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+        const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
         const dir = isFinite(br) ? dirs[Math.round(((br % 360) + 360) % 360 / 45) % 8] : '';
         let gust = null, gu = u;
         if (dcfg.gust && hass.states[dcfg.gust]) { const g = Number(hass.states[dcfg.gust].state); if (isFinite(g)) { gust = g; gu = hass.states[dcfg.gust].attributes.unit_of_measurement || u; } }
@@ -3255,7 +3266,7 @@ function update(hass, entity) {
         S.view.label = n2 === 0 ? 'Aujourd’hui' : n2 === 1 ? 'Demain' : n2 === -1 ? 'Hier'
           : n2 < 0 ? 'Précédent : ' + d3.toLocaleDateString(lang, { weekday: 'long' }) : d3.toLocaleDateString(lang, { weekday: 'long' });
         S.view.at = Date.now(); S.sig = null; S.draw();
-      });
+      }, Math.max(daysAhead(), forecastLastDay(S.items)));
       /* a day the hourly forecast barely touches (the last one often gets only its
          midnight hour) has nothing to draw: say so, and give that day's own forecast in
          words, rather than an empty chart */
@@ -3334,7 +3345,7 @@ function update(hass, entity) {
         /* a day opens when the hourly forecast covers it well enough to chart; the last
            day often gets only its midnight hour, and an empty chart is no use. Until the
            hourly forecast has arrived every day opens (its view says it's loading). */
-        if (!S.hours || hoursOn(cell.dataset.day) >= HOURS_FOR_CHART) cell.classList.add('wx-tappable');
+        cell.classList.add('wx-tappable'); // Le résumé quotidien reste consultable sans données horaires.
       }
       L.el('div', 'wx-item-label', cell).textContent = label;
       cell.appendChild(L.icon(variant(it.condition || 'cloudy', nt)));
@@ -3651,7 +3662,7 @@ const EDITOR_SCHEMA = [
   },
   {
     name: 'precipitation', type: 'expandable', title: 'Précipitations', schema: [
-      sensor('type', 'Type de précipitations', 'Type normalisé : rain, snow ou sleet. Choisit l’effet animé.'),
+      sensor('type', 'Type de précipitations', 'Capteur externe : pluie, neige ou pluie mêlée. Valeurs techniques attendues : rain, snow ou sleet.'),
       sensor('rain', 'Intensité de pluie'),
       sensor('snow', 'Intensité de neige'),
       sensor('ice', 'Intensité de pluie mêlée ou verglaçante'),
